@@ -1,24 +1,34 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
 import { PhotoGallery } from '@/components/PhotoGallery';
 import { GalleryStats } from '@/components/GalleryStats';
 import { Button } from '@/components/ui/button';
-import { 
-  getGalleryByShareToken, 
-  togglePhotoLike, 
-  submitSelections,
-  type Gallery 
-} from '@/lib/gallery-store';
 import { useToast } from '@/hooks/use-toast';
-import { Check, Send, AlertCircle } from 'lucide-react';
+import { Check, Send, AlertCircle, Loader2 } from 'lucide-react';
+
+interface Photo {
+  id: string;
+  filename: string;
+  thumbnail_url: string;
+  is_liked: boolean;
+}
+
+interface Gallery {
+  id: string;
+  title: string;
+  selections_submitted: boolean;
+  created_at: string;
+}
 
 const GuestGallery = () => {
   const { shareToken } = useParams<{ shareToken: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [gallery, setGallery] = useState<Gallery | null>(null);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
 
@@ -27,49 +37,105 @@ const GuestGallery = () => {
       setLoading(false);
       return;
     }
-
-    const foundGallery = getGalleryByShareToken(shareToken);
-    if (foundGallery) {
-      setGallery(foundGallery);
-      setSubmitted(foundGallery.selectionsSubmitted);
-    }
-    setLoading(false);
+    fetchGallery();
   }, [shareToken]);
 
-  const handleToggleLike = useCallback((photoId: string) => {
-    if (!gallery || submitted) return;
+  const fetchGallery = async () => {
+    try {
+      const { data: galleryData, error: galleryError } = await supabase
+        .from('galleries')
+        .select('*')
+        .eq('share_token', shareToken)
+        .maybeSingle();
 
-    togglePhotoLike(gallery.id, photoId);
-    
-    setGallery(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        photos: prev.photos.map(p => 
-          p.id === photoId ? { ...p, isLiked: !p.isLiked } : p
-        ),
-      };
-    });
-  }, [gallery, submitted]);
+      if (galleryError) throw galleryError;
+      
+      if (!galleryData) {
+        setLoading(false);
+        return;
+      }
 
-  const handleSubmit = useCallback(() => {
+      setGallery(galleryData);
+      setSubmitted(galleryData.selections_submitted);
+
+      const { data: photosData, error: photosError } = await supabase
+        .from('photos')
+        .select('*')
+        .eq('gallery_id', galleryData.id)
+        .order('created_at', { ascending: true });
+
+      if (photosError) throw photosError;
+      setPhotos(photosData || []);
+    } catch (error) {
+      console.error('Error fetching gallery:', error);
+    }
+    setLoading(false);
+  };
+
+  const handleToggleLike = useCallback(async (photoId: string) => {
+    if (submitted) return;
+
+    const photo = photos.find(p => p.id === photoId);
+    if (!photo) return;
+
+    const newIsLiked = !photo.is_liked;
+
+    // Optimistic update
+    setPhotos(prev => prev.map(p => 
+      p.id === photoId ? { ...p, is_liked: newIsLiked } : p
+    ));
+
+    // Update in database
+    const { error } = await supabase
+      .from('photos')
+      .update({ is_liked: newIsLiked })
+      .eq('id', photoId);
+
+    if (error) {
+      // Revert on error
+      setPhotos(prev => prev.map(p => 
+        p.id === photoId ? { ...p, is_liked: !newIsLiked } : p
+      ));
+    }
+  }, [photos, submitted]);
+
+  const handleSubmit = useCallback(async () => {
     if (!gallery) return;
 
-    submitSelections(gallery.id);
+    const { error } = await supabase
+      .from('galleries')
+      .update({ selections_submitted: true })
+      .eq('id', gallery.id);
+
+    if (error) {
+      toast({
+        title: 'Error submitting',
+        description: 'Could not submit your selections.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setSubmitted(true);
-    
     toast({
-      title: "Selections submitted!",
-      description: "Your favorites have been sent to the photographer.",
+      title: 'Selections submitted!',
+      description: 'Your favorites have been sent to the photographer.',
     });
   }, [gallery, toast]);
 
-  const likedCount = gallery?.photos.filter(p => p.isLiked).length ?? 0;
+  const galleryPhotos = photos.map(photo => ({
+    id: photo.id,
+    filename: photo.filename,
+    previewUrl: photo.thumbnail_url,
+    isLiked: photo.is_liked,
+  }));
+
+  const likedCount = photos.filter(p => p.is_liked).length;
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -108,12 +174,11 @@ const GuestGallery = () => {
           animate={{ opacity: 1 }}
           className="space-y-8"
         >
-          {/* Header section */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="space-y-2">
               <h2 className="text-2xl font-bold text-foreground">{gallery.title}</h2>
               <GalleryStats 
-                totalPhotos={gallery.photos.length} 
+                totalPhotos={photos.length} 
                 likedPhotos={likedCount}
               />
             </div>
@@ -145,7 +210,6 @@ const GuestGallery = () => {
             </AnimatePresence>
           </div>
 
-          {/* Instructions */}
           {!submitted && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -159,9 +223,8 @@ const GuestGallery = () => {
             </motion.div>
           )}
 
-          {/* Gallery */}
           <PhotoGallery 
-            photos={gallery.photos} 
+            photos={galleryPhotos} 
             onToggleLike={handleToggleLike}
           />
         </motion.div>
