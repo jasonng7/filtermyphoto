@@ -7,7 +7,7 @@ import { PhotoGallery } from '@/components/PhotoGallery';
 import { GalleryStats } from '@/components/GalleryStats';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Check, Send, AlertCircle, Loader2 } from 'lucide-react';
+import { Check, Send, AlertCircle, Loader2, Pencil } from 'lucide-react';
 
 interface Photo {
   id: string;
@@ -123,6 +123,30 @@ const GuestGallery = () => {
     });
   }, [gallery, toast]);
 
+  const handleEditSelection = useCallback(async () => {
+    if (!gallery) return;
+
+    const { error } = await supabase
+      .from('galleries')
+      .update({ selections_submitted: false })
+      .eq('id', gallery.id);
+
+    if (error) {
+      toast({
+        title: 'Error',
+        description: 'Could not enable editing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSubmitted(false);
+    toast({
+      title: 'Editing enabled',
+      description: 'You can now update your selections.',
+    });
+  }, [gallery, toast]);
+
   const galleryPhotos = photos.map(photo => ({
     id: photo.id,
     filename: photo.filename,
@@ -189,10 +213,20 @@ const GuestGallery = () => {
                   key="submitted"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-success/20 text-success"
+                  className="flex items-center gap-3"
                 >
-                  <Check className="w-4 h-4" />
-                  <span className="font-medium">Selections Submitted</span>
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-success/20 text-success">
+                    <Check className="w-4 h-4" />
+                    <span className="font-medium">Selections Submitted</span>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleEditSelection}
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Edit
+                  </Button>
                 </motion.div>
               ) : (
                 <motion.div key="submit">
@@ -220,6 +254,32 @@ const GuestGallery = () => {
                 <span className="font-semibold text-primary">Tap the heart icon</span> on your favorite photos to select them. 
                 When you're done, click "Submit Selections" to send your choices to the photographer.
               </p>
+            </motion.div>
+          )}
+
+          {likedCount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-xl bg-accent/10 border border-accent/20"
+            >
+              <p className="text-sm font-medium text-foreground mb-3">
+                Your Selections ({likedCount})
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {photos.filter(p => p.is_liked).map(photo => (
+                  <div 
+                    key={photo.id} 
+                    className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-primary"
+                  >
+                    <img 
+                      src={photo.thumbnail_url} 
+                      alt={photo.filename}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
             </motion.div>
           )}
 
