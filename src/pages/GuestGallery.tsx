@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
 import { PhotoGallery } from '@/components/PhotoGallery';
 import { GalleryStats } from '@/components/GalleryStats';
+import { GalleryFilters } from '@/components/GalleryFilters';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Check, Send, AlertCircle, Loader2, Pencil } from 'lucide-react';
@@ -31,6 +32,7 @@ const GuestGallery = () => {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'liked' | 'not-liked'>('all');
 
   useEffect(() => {
     if (!shareToken) {
@@ -147,14 +149,26 @@ const GuestGallery = () => {
     });
   }, [gallery, toast]);
 
-  const galleryPhotos = photos.map(photo => ({
+  const likedCount = photos.filter(p => p.is_liked).length;
+  const notLikedCount = photos.length - likedCount;
+
+  const filteredPhotos = useMemo(() => {
+    switch (filter) {
+      case 'liked':
+        return photos.filter(p => p.is_liked);
+      case 'not-liked':
+        return photos.filter(p => !p.is_liked);
+      default:
+        return photos;
+    }
+  }, [photos, filter]);
+
+  const galleryPhotos = filteredPhotos.map(photo => ({
     id: photo.id,
     filename: photo.filename,
     previewUrl: photo.thumbnail_url,
     isLiked: photo.is_liked,
   }));
-
-  const likedCount = photos.filter(p => p.is_liked).length;
 
   if (loading) {
     return (
@@ -282,6 +296,12 @@ const GuestGallery = () => {
               </div>
             </motion.div>
           )}
+
+          <GalleryFilters
+            filter={filter}
+            onFilterChange={setFilter}
+            counts={{ all: photos.length, liked: likedCount, notLiked: notLikedCount }}
+          />
 
           <PhotoGallery 
             photos={galleryPhotos} 
