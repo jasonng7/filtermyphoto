@@ -20,8 +20,8 @@ export function Header({ showNav = true }: HeaderProps) {
             <Aperture className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-bold text-lg text-foreground">PhotoCull</h1>
-            <p className="text-xs text-muted-foreground -mt-0.5">RAW Preview Selector</p>
+            <h1 className="font-bold text-lg text-foreground">FilterMyPhoto</h1>
+            <p className="text-xs text-muted-foreground -mt-0.5">Photo Selection Tool</p>
           </div>
         </Link>
         
