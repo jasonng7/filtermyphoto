@@ -93,8 +93,7 @@ const AdminDashboard = () => {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
   const [selectedGalleries, setSelectedGalleries] = useState<Set<string>>(new Set());
-  const [bulkDeleteProfilesOpen, setBulkDeleteProfilesOpen] = useState(false);
-  const [bulkDeleteGalleriesOpen, setBulkDeleteGalleriesOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -212,26 +211,42 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleBulkDeleteProfiles = async () => {
+  const handleBulkDelete = async () => {
     try {
-      const ids = Array.from(selectedProfiles);
-      const { error } = await supabase
-        .from('admin_profiles')
-        .delete()
-        .in('id', ids);
+      // Delete selected profiles
+      if (selectedProfiles.size > 0) {
+        const profileIds = Array.from(selectedProfiles);
+        const { error } = await supabase
+          .from('admin_profiles')
+          .delete()
+          .in('id', profileIds);
+        if (error) throw error;
+      }
 
-      if (error) throw error;
+      // Delete selected galleries and their photos
+      if (selectedGalleries.size > 0) {
+        const galleryIds = Array.from(selectedGalleries);
+        for (const id of galleryIds) {
+          await supabase.from('photos').delete().eq('gallery_id', id);
+        }
+        const { error } = await supabase
+          .from('galleries')
+          .delete()
+          .in('id', galleryIds);
+        if (error) throw error;
+      }
 
+      const deletedCount = selectedProfiles.size + selectedGalleries.size;
       toast({
-        title: 'Sources deleted',
-        description: `${ids.length} Google Drive source(s) have been removed.`,
+        title: 'Items deleted',
+        description: `${deletedCount} item(s) have been removed.`,
       });
-      setBulkDeleteProfilesOpen(false);
+      setBulkDeleteOpen(false);
       fetchData();
     } catch (error) {
       toast({
-        title: 'Error deleting sources',
-        description: 'Could not delete the sources.',
+        title: 'Error deleting items',
+        description: 'Could not delete the selected items.',
         variant: 'destructive',
       });
     }
@@ -317,37 +332,6 @@ const AdminDashboard = () => {
       toast({
         title: 'Error deleting gallery',
         description: 'Could not delete the gallery.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleBulkDeleteGalleries = async () => {
-    try {
-      const ids = Array.from(selectedGalleries);
-      
-      // Delete photos for all galleries
-      for (const id of ids) {
-        await supabase.from('photos').delete().eq('gallery_id', id);
-      }
-
-      const { error } = await supabase
-        .from('galleries')
-        .delete()
-        .in('id', ids);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Galleries deleted',
-        description: `${ids.length} gallery(ies) and their photos have been removed.`,
-      });
-      setBulkDeleteGalleriesOpen(false);
-      fetchData();
-    } catch (error) {
-      toast({
-        title: 'Error deleting galleries',
-        description: 'Could not delete the galleries.',
         variant: 'destructive',
       });
     }
@@ -471,10 +455,7 @@ const AdminDashboard = () => {
                   {totalSelected > 0 && (
                     <Button 
                       variant="destructive"
-                      onClick={() => {
-                        if (selectedProfiles.size > 0) setBulkDeleteProfilesOpen(true);
-                        else if (selectedGalleries.size > 0) setBulkDeleteGalleriesOpen(true);
-                      }}
+                      onClick={() => setBulkDeleteOpen(true)}
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete {totalSelected}
@@ -643,43 +624,37 @@ const AdminDashboard = () => {
         onSuccess={handleGalleryCreated}
       />
 
-      {/* Bulk Delete Profiles Dialog */}
-      <AlertDialog open={bulkDeleteProfilesOpen} onOpenChange={setBulkDeleteProfilesOpen}>
+      {/* Bulk Delete Dialog */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedProfiles.size} source(s)?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {totalSelected} item(s)?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the selected Google Drive sources. Existing galleries created from these sources will not be affected.
+              {selectedProfiles.size > 0 && selectedGalleries.size > 0 ? (
+                <>
+                  This will delete {selectedProfiles.size} source(s) and {selectedGalleries.size} gallery(ies) with all their photos.
+                  This action cannot be undone.
+                </>
+              ) : selectedProfiles.size > 0 ? (
+                <>
+                  This will remove {selectedProfiles.size} Google Drive source(s). 
+                  Existing galleries created from these sources will not be affected.
+                </>
+              ) : (
+                <>
+                  This will permanently delete {selectedGalleries.size} gallery(ies) and all their photos.
+                  This action cannot be undone.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleBulkDeleteProfiles} 
+              onClick={handleBulkDelete} 
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete {selectedProfiles.size}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Bulk Delete Galleries Dialog */}
-      <AlertDialog open={bulkDeleteGalleriesOpen} onOpenChange={setBulkDeleteGalleriesOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedGalleries.size} gallery(ies)?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the selected galleries and all their photos. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleBulkDeleteGalleries} 
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete {selectedGalleries.size}
+              Delete {totalSelected}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
