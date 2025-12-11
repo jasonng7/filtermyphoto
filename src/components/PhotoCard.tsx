@@ -24,12 +24,8 @@ export function PhotoCard({ photo, onToggleLike, showFilename = false, index = 0
 
   return (
     <>
-      <motion.div
+      <div
         className="photo-card group relative aspect-[3/2] bg-card overflow-hidden"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3, delay: index * 0.02 }}
-        layout
       >
         <img
           src={photo.previewUrl}
@@ -88,7 +84,7 @@ export function PhotoCard({ photo, onToggleLike, showFilename = false, index = 0
             transition={{ duration: 0.2 }}
           />
         )}
-      </motion.div>
+      </div>
 
       {/* Full-size preview dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
