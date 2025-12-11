@@ -56,23 +56,21 @@ export function PhotoCard({ photo, onToggleLike, showFilename = false, index = 0
         </motion.button>
         
         {/* Like button */}
-        <motion.button
+        <button
           className={cn(
             'absolute top-3 right-3 w-10 h-10 rounded-full flex items-center justify-center',
             'bg-black/40 backdrop-blur-sm border border-white/10',
-            'transition-all duration-300',
             photo.isLiked ? 'bg-primary/90 border-primary' : 'hover:bg-black/60'
           )}
           onClick={() => onToggleLike(photo.id)}
-          whileTap={{ scale: 0.95 }}
         >
           <Heart
             className={cn(
-              'w-5 h-5 transition-colors duration-200',
+              'w-5 h-5',
               photo.isLiked ? 'fill-primary-foreground text-primary-foreground' : 'text-white'
             )}
           />
-        </motion.button>
+        </button>
         
         {/* Filename overlay */}
         {showFilename && (
@@ -106,23 +104,21 @@ export function PhotoCard({ photo, onToggleLike, showFilename = false, index = 0
           </button>
           
           {/* Like button in preview */}
-          <motion.button
+          <button
             className={cn(
               'absolute top-4 left-4 z-50 w-10 h-10 rounded-full flex items-center justify-center',
               'bg-black/60 backdrop-blur-sm border border-white/20',
-              'transition-all duration-300',
               photo.isLiked ? 'bg-primary/90 border-primary' : 'hover:bg-black/80'
             )}
             onClick={() => onToggleLike(photo.id)}
-            whileTap={{ scale: 0.95 }}
           >
             <Heart
               className={cn(
-                'w-5 h-5 transition-colors duration-200',
+                'w-5 h-5',
                 photo.isLiked ? 'fill-primary-foreground text-primary-foreground' : 'text-white'
               )}
             />
-          </motion.button>
+          </button>
           
           {/* Image container */}
           <div className="flex items-center justify-center w-full h-[85vh]">
