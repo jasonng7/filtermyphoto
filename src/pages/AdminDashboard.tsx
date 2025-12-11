@@ -89,7 +89,8 @@ const AdminDashboard = () => {
   const [createProfileOpen, setCreateProfileOpen] = useState(false);
   const [createGalleryOpen, setCreateGalleryOpen] = useState(false);
   
-  // Selection state
+  // Selection mode state
+  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
   const [selectedGalleries, setSelectedGalleries] = useState<Set<string>>(new Set());
   const [bulkDeleteProfilesOpen, setBulkDeleteProfilesOpen] = useState(false);
@@ -158,9 +159,10 @@ const AdminDashboard = () => {
       );
 
       setGalleries(galleriesWithCounts);
-      // Clear selections after refresh
+      // Clear selections and exit selection mode after refresh
       setSelectedProfiles(new Set());
       setSelectedGalleries(new Set());
+      setSelectionMode(false);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -429,6 +431,14 @@ const AdminDashboard = () => {
     });
   };
 
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedProfiles(new Set());
+    setSelectedGalleries(new Set());
+  };
+
+  const totalSelected = selectedProfiles.size + selectedGalleries.size;
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -455,10 +465,40 @@ const AdminDashboard = () => {
                 Manage your Google Drive sources and galleries
               </p>
             </div>
-            <Button variant="outline" onClick={handleSignOut}>
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
+            <div className="flex items-center gap-2">
+              {selectionMode ? (
+                <>
+                  {totalSelected > 0 && (
+                    <Button 
+                      variant="destructive"
+                      onClick={() => {
+                        if (selectedProfiles.size > 0) setBulkDeleteProfilesOpen(true);
+                        else if (selectedGalleries.size > 0) setBulkDeleteGalleriesOpen(true);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete {totalSelected}
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={exitSelectionMode}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {(profiles.length > 0 || galleries.length > 0) && (
+                    <Button variant="outline" onClick={() => setSelectionMode(true)}>
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={handleSignOut}>
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Google Drive Profiles Section */}
@@ -467,23 +507,16 @@ const AdminDashboard = () => {
               <div className="flex items-center gap-2">
                 <FolderOpen className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Google Drive Sources</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedProfiles.size > 0 && (
-                  <Button 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={() => setBulkDeleteProfilesOpen(true)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete {selectedProfiles.size}
-                  </Button>
+                {selectionMode && selectedProfiles.size > 0 && (
+                  <span className="text-sm text-muted-foreground">({selectedProfiles.size} selected)</span>
                 )}
+              </div>
+              {!selectionMode && (
                 <Button onClick={() => setCreateProfileOpen(true)}>
                   <FolderPlus className="w-4 h-4" />
                   Add Source
                 </Button>
-              </div>
+              )}
             </div>
 
             {profiles.length === 0 ? (
@@ -514,6 +547,7 @@ const AdminDashboard = () => {
                       <AdminProfileCard
                         key={profile.id}
                         profile={profile}
+                        selectionMode={selectionMode}
                         isSelected={selectedProfiles.has(profile.id)}
                         onSelect={(selected) => toggleProfileSelection(profile.id, selected)}
                         onDelete={() => handleDeleteProfile(profile.id)}
@@ -532,18 +566,11 @@ const AdminDashboard = () => {
               <div className="flex items-center gap-2">
                 <Images className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Galleries</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                {selectedGalleries.size > 0 && (
-                  <Button 
-                    variant="destructive" 
-                    size="sm"
-                    onClick={() => setBulkDeleteGalleriesOpen(true)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete {selectedGalleries.size}
-                  </Button>
+                {selectionMode && selectedGalleries.size > 0 && (
+                  <span className="text-sm text-muted-foreground">({selectedGalleries.size} selected)</span>
                 )}
+              </div>
+              {!selectionMode && (
                 <Button 
                   onClick={() => setCreateGalleryOpen(true)}
                   disabled={profiles.length === 0}
@@ -551,7 +578,7 @@ const AdminDashboard = () => {
                   <ImagePlus className="w-4 h-4" />
                   Create Gallery
                 </Button>
-              </div>
+              )}
             </div>
 
             {galleries.length === 0 ? (
@@ -587,6 +614,7 @@ const AdminDashboard = () => {
                         key={gallery.id}
                         gallery={gallery}
                         profiles={profiles}
+                        selectionMode={selectionMode}
                         isSelected={selectedGalleries.has(gallery.id)}
                         onSelect={(selected) => toggleGallerySelection(gallery.id, selected)}
                         onClick={() => navigate(`/admin/gallery/${gallery.id}`)}
