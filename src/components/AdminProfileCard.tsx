@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FolderOpen, Trash2, ExternalLink, Pencil } from 'lucide-react';
+import { FolderOpen, Trash2, ExternalLink, Pencil, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { RenameDialog } from '@/components/RenameDialog';
+import { EditSourceDialog } from '@/components/EditSourceDialog';
 
 interface AdminProfile {
   id: string;
@@ -21,17 +21,30 @@ interface AdminProfile {
   google_folder_id: string;
   google_folder_url: string;
   created_at: string;
+  display_order?: number;
 }
 
 interface AdminProfileCardProps {
   profile: AdminProfile;
   onDelete: () => void;
-  onRename: (newName: string) => Promise<void>;
+  onEdit: (newName: string, newUrl: string) => Promise<void>;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
-export function AdminProfileCard({ profile, onDelete, onRename }: AdminProfileCardProps) {
+export function AdminProfileCard({ 
+  profile, 
+  onDelete, 
+  onEdit,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
+}: AdminProfileCardProps) {
   const createdDate = new Date(profile.created_at).toLocaleDateString();
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   return (
     <>
@@ -52,11 +65,31 @@ export function AdminProfileCard({ profile, onDelete, onRename }: AdminProfileCa
           </div>
 
           <div className="flex items-center gap-1">
+            <div className="flex flex-col">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                onClick={onMoveUp}
+                disabled={!canMoveUp}
+              >
+                <ChevronUp className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                onClick={onMoveDown}
+                disabled={!canMoveDown}
+              >
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </div>
             <Button
               variant="ghost"
               size="icon"
               className="text-muted-foreground hover:text-foreground"
-              onClick={() => setRenameOpen(true)}
+              onClick={() => setEditOpen(true)}
             >
               <Pencil className="w-4 h-4" />
             </Button>
@@ -97,12 +130,12 @@ export function AdminProfileCard({ profile, onDelete, onRename }: AdminProfileCa
         </div>
       </motion.div>
 
-      <RenameDialog
-        open={renameOpen}
-        onOpenChange={setRenameOpen}
+      <EditSourceDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
         currentName={profile.name}
-        itemType="source"
-        onRename={onRename}
+        currentUrl={profile.google_folder_url}
+        onSave={onEdit}
       />
     </>
   );

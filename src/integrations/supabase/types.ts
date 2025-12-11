@@ -17,6 +17,7 @@ export type Database = {
       admin_profiles: {
         Row: {
           created_at: string
+          display_order: number | null
           google_folder_id: string
           google_folder_url: string
           id: string
@@ -25,6 +26,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          display_order?: number | null
           google_folder_id: string
           google_folder_url: string
           id?: string
@@ -33,6 +35,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          display_order?: number | null
           google_folder_id?: string
           google_folder_url?: string
           id?: string
@@ -45,6 +48,7 @@ export type Database = {
         Row: {
           admin_profile_id: string | null
           created_at: string
+          display_order: number | null
           id: string
           selections_submitted: boolean
           share_token: string
@@ -54,6 +58,7 @@ export type Database = {
         Insert: {
           admin_profile_id?: string | null
           created_at?: string
+          display_order?: number | null
           id?: string
           selections_submitted?: boolean
           share_token: string
@@ -63,6 +68,7 @@ export type Database = {
         Update: {
           admin_profile_id?: string | null
           created_at?: string
+          display_order?: number | null
           id?: string
           selections_submitted?: boolean
           share_token?: string

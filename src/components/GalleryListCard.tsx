@@ -1,8 +1,31 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Images, Heart, Check, ChevronRight, Pencil } from 'lucide-react';
+import { Images, Heart, Check, ChevronRight, Pencil, Trash2, Link2, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { RenameDialog } from '@/components/RenameDialog';
+import { EditGalleryDialog } from '@/components/EditGalleryDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { useToast } from '@/hooks/use-toast';
+
+interface AdminProfile {
+  id: string;
+  name: string;
+}
 
 interface Gallery {
   id: string;
@@ -12,17 +35,52 @@ interface Gallery {
   created_at: string;
   photo_count: number;
   liked_count: number;
+  display_order?: number;
+  admin_profile_id?: string | null;
 }
 
 interface GalleryListCardProps {
   gallery: Gallery;
+  profiles: AdminProfile[];
   onClick: () => void;
-  onRename: (newName: string) => Promise<void>;
+  onEdit: (newName: string, newProfileId: string | null) => Promise<void>;
+  onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
-export function GalleryListCard({ gallery, onClick, onRename }: GalleryListCardProps) {
+export function GalleryListCard({ 
+  gallery, 
+  profiles,
+  onClick, 
+  onEdit, 
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
+}: GalleryListCardProps) {
   const createdDate = new Date(gallery.created_at).toLocaleDateString();
-  const [renameOpen, setRenameOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const { toast } = useToast();
+
+  const shareUrl = `${window.location.origin}/gallery/${gallery.share_token}`;
+
+  const handleCopyLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(shareUrl);
+    toast({
+      title: 'Link copied',
+      description: 'Client gallery link copied to clipboard.',
+    });
+  };
+
+  const handleOpenLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open(shareUrl, '_blank');
+  };
 
   return (
     <>
@@ -46,17 +104,81 @@ export function GalleryListCard({ gallery, onClick, onRename }: GalleryListCardP
           </button>
 
           <div className="flex items-center gap-1">
+            <div className="flex flex-col">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
+                disabled={!canMoveUp}
+              >
+                <ChevronUp className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
+                disabled={!canMoveDown}
+              >
+                <ChevronDown className="w-4 h-4" />
+              </Button>
+            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-primary"
+                    onClick={handleCopyLink}
+                    onDoubleClick={handleOpenLink}
+                  >
+                    <Link2 className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Click to copy, double-click to open</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Button
               variant="ghost"
               size="icon"
               className="text-muted-foreground hover:text-foreground"
               onClick={(e) => {
                 e.stopPropagation();
-                setRenameOpen(true);
+                setEditOpen(true);
               }}
             >
               <Pencil className="w-4 h-4" />
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this gallery?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete "{gallery.title}" and all its photos. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <button onClick={onClick}>
               <ChevronRight className="w-5 h-5 text-muted-foreground" />
             </button>
@@ -83,12 +205,13 @@ export function GalleryListCard({ gallery, onClick, onRename }: GalleryListCardP
         </button>
       </motion.div>
 
-      <RenameDialog
-        open={renameOpen}
-        onOpenChange={setRenameOpen}
+      <EditGalleryDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
         currentName={gallery.title}
-        itemType="gallery"
-        onRename={onRename}
+        currentProfileId={gallery.admin_profile_id || null}
+        profiles={profiles}
+        onSave={onEdit}
       />
     </>
   );
