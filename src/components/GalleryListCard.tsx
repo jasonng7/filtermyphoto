@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Images, Heart, Check, ChevronRight, Pencil, Trash2, Link2, GripVertical, AlertTriangle, FolderOpen } from 'lucide-react';
+import { Images, Heart, Check, ChevronRight, Pencil, Trash2, Link2, GripVertical, AlertTriangle, FolderOpen, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EditGalleryDialog } from '@/components/EditGalleryDialog';
@@ -44,6 +44,7 @@ interface Gallery {
 interface GalleryListCardProps {
   gallery: Gallery;
   profiles: AdminProfile[];
+  thumbnails: string[];
   selectionMode: boolean;
   isSelected: boolean;
   onSelect: (selected: boolean) => void;
@@ -55,6 +56,7 @@ interface GalleryListCardProps {
 export function GalleryListCard({ 
   gallery, 
   profiles,
+  thumbnails,
   selectionMode,
   isSelected,
   onSelect,
@@ -110,6 +112,34 @@ export function GalleryListCard({
         style={style}
         className="w-full text-left card-elevated rounded-xl p-5 space-y-4 transition-all hover:ring-2 hover:ring-primary/50"
       >
+        {/* Thumbnail Preview */}
+        <div className="relative h-24 rounded-lg overflow-hidden bg-muted/30">
+          {thumbnails.length > 0 ? (
+            <div className="flex h-full">
+              {thumbnails.slice(0, 4).map((url, index) => (
+                <div 
+                  key={index} 
+                  className="flex-1 h-full"
+                  style={{ minWidth: `${100 / Math.min(thumbnails.length, 4)}%` }}
+                >
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <ImageOff className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                <span className="text-xs">No photos yet</span>
+              </div>
+            </div>
+          )}
+        </div>
+        
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             {selectionMode ? (
