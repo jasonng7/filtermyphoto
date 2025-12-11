@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { FolderOpen, Trash2, ExternalLink, Pencil, GripVertical } from 'lucide-react';
+import { FolderOpen, Trash2, ExternalLink, Pencil, GripVertical, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -28,6 +28,7 @@ interface AdminProfile {
 
 interface AdminProfileCardProps {
   profile: AdminProfile;
+  thumbnails: string[];
   selectionMode: boolean;
   isSelected: boolean;
   onSelect: (selected: boolean) => void;
@@ -37,6 +38,7 @@ interface AdminProfileCardProps {
 
 export function AdminProfileCard({ 
   profile, 
+  thumbnails,
   selectionMode,
   isSelected,
   onSelect,
@@ -68,6 +70,34 @@ export function AdminProfileCard({
         style={style}
         className="card-elevated rounded-xl p-5 space-y-4"
       >
+        {/* Thumbnail Preview */}
+        <div className="relative h-24 rounded-lg overflow-hidden bg-muted/30">
+          {thumbnails.length > 0 ? (
+            <div className="flex h-full">
+              {thumbnails.slice(0, 4).map((url, index) => (
+                <div 
+                  key={index} 
+                  className="flex-1 h-full"
+                  style={{ minWidth: `${100 / Math.min(thumbnails.length, 4)}%` }}
+                >
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <ImageOff className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                <span className="text-xs">No synced photos</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             {selectionMode ? (

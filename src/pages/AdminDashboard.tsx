@@ -85,6 +85,7 @@ const AdminDashboard = () => {
   const { toast } = useToast();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [galleries, setGalleries] = useState<Gallery[]>([]);
+  const [profileThumbnails, setProfileThumbnails] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [createProfileOpen, setCreateProfileOpen] = useState(false);
   const [createGalleryOpen, setCreateGalleryOpen] = useState(false);
@@ -158,6 +159,26 @@ const AdminDashboard = () => {
       );
 
       setGalleries(galleriesWithCounts);
+
+      // Fetch thumbnails for each profile
+      const thumbnails: Record<string, string[]> = {};
+      for (const profile of profilesData || []) {
+        // Get galleries linked to this profile
+        const linkedGalleries = galleriesData?.filter(g => g.admin_profile_id === profile.id) || [];
+        if (linkedGalleries.length > 0) {
+          const galleryIds = linkedGalleries.map(g => g.id);
+          const { data: photos } = await supabase
+            .from('photos')
+            .select('thumbnail_url')
+            .in('gallery_id', galleryIds)
+            .limit(4);
+          thumbnails[profile.id] = photos?.map(p => p.thumbnail_url) || [];
+        } else {
+          thumbnails[profile.id] = [];
+        }
+      }
+      setProfileThumbnails(thumbnails);
+
       // Clear selections and exit selection mode after refresh
       setSelectedProfiles(new Set());
       setSelectedGalleries(new Set());
@@ -528,6 +549,7 @@ const AdminDashboard = () => {
                       <AdminProfileCard
                         key={profile.id}
                         profile={profile}
+                        thumbnails={profileThumbnails[profile.id] || []}
                         selectionMode={selectionMode}
                         isSelected={selectedProfiles.has(profile.id)}
                         onSelect={(selected) => toggleProfileSelection(profile.id, selected)}
