@@ -157,6 +157,54 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleRenameProfile = async (profileId: string, newName: string) => {
+    try {
+      const { error } = await supabase
+        .from('admin_profiles')
+        .update({ name: newName })
+        .eq('id', profileId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Source renamed',
+        description: 'The Google Drive source has been renamed.',
+      });
+      fetchData();
+    } catch (error) {
+      toast({
+        title: 'Error renaming source',
+        description: 'Could not rename the source.',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
+  const handleRenameGallery = async (galleryId: string, newName: string) => {
+    try {
+      const { error } = await supabase
+        .from('galleries')
+        .update({ title: newName })
+        .eq('id', galleryId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Gallery renamed',
+        description: 'The gallery has been renamed.',
+      });
+      fetchData();
+    } catch (error) {
+      toast({
+        title: 'Error renaming gallery',
+        description: 'Could not rename the gallery.',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -225,6 +273,7 @@ const AdminDashboard = () => {
                     key={profile.id}
                     profile={profile}
                     onDelete={() => handleDeleteProfile(profile.id)}
+                    onRename={(newName) => handleRenameProfile(profile.id, newName)}
                   />
                 ))}
               </div>
@@ -274,6 +323,7 @@ const AdminDashboard = () => {
                     key={gallery.id}
                     gallery={gallery}
                     onClick={() => navigate(`/admin/gallery/${gallery.id}`)}
+                    onRename={(newName) => handleRenameGallery(gallery.id, newName)}
                   />
                 ))}
               </div>
