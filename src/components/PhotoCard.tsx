@@ -64,12 +64,12 @@ export function PhotoCard({ photo, onToggleLike, showFilename = false, index = 0
             photo.isLiked ? 'bg-primary/90 border-primary' : 'hover:bg-black/60'
           )}
           onClick={() => onToggleLike(photo.id)}
-          whileTap={{ scale: 0.9 }}
+          whileTap={{ scale: 0.95 }}
         >
           <Heart
             className={cn(
-              'w-5 h-5 transition-all duration-300',
-              photo.isLiked ? 'fill-primary-foreground text-primary-foreground animate-heart-pop' : 'text-white'
+              'w-5 h-5 transition-colors duration-200',
+              photo.isLiked ? 'fill-primary-foreground text-primary-foreground' : 'text-white'
             )}
           />
         </motion.button>
@@ -114,11 +114,11 @@ export function PhotoCard({ photo, onToggleLike, showFilename = false, index = 0
               photo.isLiked ? 'bg-primary/90 border-primary' : 'hover:bg-black/80'
             )}
             onClick={() => onToggleLike(photo.id)}
-            whileTap={{ scale: 0.9 }}
+            whileTap={{ scale: 0.95 }}
           >
             <Heart
               className={cn(
-                'w-5 h-5 transition-all duration-300',
+                'w-5 h-5 transition-colors duration-200',
                 photo.isLiked ? 'fill-primary-foreground text-primary-foreground' : 'text-white'
               )}
             />
