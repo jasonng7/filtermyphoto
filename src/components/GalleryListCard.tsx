@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Images, Heart, Check, ChevronRight, Pencil, Trash2, Link2, GripVertical } from 'lucide-react';
+import { Images, Heart, Check, ChevronRight, Pencil, Trash2, Link2, GripVertical, AlertTriangle, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EditGalleryDialog } from '@/components/EditGalleryDialog';
@@ -65,6 +65,12 @@ export function GalleryListCard({
   const createdDate = new Date(gallery.created_at).toLocaleDateString();
   const [editOpen, setEditOpen] = useState(false);
   const { toast } = useToast();
+
+  // Find connected source
+  const connectedSource = gallery.admin_profile_id 
+    ? profiles.find(p => p.id === gallery.admin_profile_id) 
+    : null;
+  const hasNoSource = !gallery.admin_profile_id || !connectedSource;
 
   const {
     attributes,
@@ -198,7 +204,7 @@ export function GalleryListCard({
         </div>
 
         <button onClick={onClick} className="w-full">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <Images className="w-4 h-4" />
               <span>{gallery.photo_count} photos</span>
@@ -211,6 +217,21 @@ export function GalleryListCard({
               <div className="flex items-center gap-1.5 text-success">
                 <Check className="w-4 h-4" />
                 <span>Submitted</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Source indicator */}
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border">
+            {hasNoSource ? (
+              <div className="flex items-center gap-1.5 text-destructive">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="text-xs">No source - select one to sync</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <FolderOpen className="w-4 h-4" />
+                <span className="text-xs">{connectedSource?.name}</span>
               </div>
             )}
           </div>
