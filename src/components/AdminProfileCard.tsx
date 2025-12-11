@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { FolderOpen, Trash2, ExternalLink, Pencil, ChevronUp, ChevronDown } from 'lucide-react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { FolderOpen, Trash2, ExternalLink, Pencil, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,35 +28,60 @@ interface AdminProfile {
 
 interface AdminProfileCardProps {
   profile: AdminProfile;
+  isSelected: boolean;
+  onSelect: (selected: boolean) => void;
   onDelete: () => void;
   onEdit: (newName: string, newUrl: string) => Promise<void>;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
 }
 
 export function AdminProfileCard({ 
   profile, 
+  isSelected,
+  onSelect,
   onDelete, 
   onEdit,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp = false,
-  canMoveDown = false,
 }: AdminProfileCardProps) {
   const createdDate = new Date(profile.created_at).toLocaleDateString();
   const [editOpen, setEditOpen] = useState(false);
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: profile.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
+        ref={setNodeRef}
+        style={style}
         className="card-elevated rounded-xl p-5 space-y-4"
       >
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={onSelect}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
+              >
+                <GripVertical className="w-5 h-5" />
+              </button>
+            </div>
             <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
               <FolderOpen className="w-5 h-5 text-primary" />
             </div>
@@ -65,26 +92,6 @@ export function AdminProfileCard({
           </div>
 
           <div className="flex items-center gap-1">
-            <div className="flex flex-col">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={onMoveUp}
-                disabled={!canMoveUp}
-              >
-                <ChevronUp className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={onMoveDown}
-                disabled={!canMoveDown}
-              >
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -128,7 +135,7 @@ export function AdminProfileCard({
             Open in Google Drive
           </a>
         </div>
-      </motion.div>
+      </div>
 
       <EditSourceDialog
         open={editOpen}

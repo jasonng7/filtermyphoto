@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Images, Heart, Check, ChevronRight, Pencil, Trash2, Link2, ChevronUp, ChevronDown } from 'lucide-react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Images, Heart, Check, ChevronRight, Pencil, Trash2, Link2, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { EditGalleryDialog } from '@/components/EditGalleryDialog';
 import {
   AlertDialog,
@@ -42,29 +44,40 @@ interface Gallery {
 interface GalleryListCardProps {
   gallery: Gallery;
   profiles: AdminProfile[];
+  isSelected: boolean;
+  onSelect: (selected: boolean) => void;
   onClick: () => void;
   onEdit: (newName: string, newProfileId: string | null) => Promise<void>;
   onDelete: () => void;
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
 }
 
 export function GalleryListCard({ 
   gallery, 
   profiles,
+  isSelected,
+  onSelect,
   onClick, 
   onEdit, 
   onDelete,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp = false,
-  canMoveDown = false,
 }: GalleryListCardProps) {
   const createdDate = new Date(gallery.created_at).toLocaleDateString();
   const [editOpen, setEditOpen] = useState(false);
   const { toast } = useToast();
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: gallery.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const shareUrl = `${window.location.origin}/gallery/${gallery.share_token}`;
 
@@ -84,46 +97,42 @@ export function GalleryListCard({
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
+        ref={setNodeRef}
+        style={style}
         className="w-full text-left card-elevated rounded-xl p-5 space-y-4 transition-all hover:ring-2 hover:ring-primary/50"
       >
         <div className="flex items-start justify-between">
-          <button
-            onClick={onClick}
-            className="flex items-center gap-3 text-left flex-1"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-              <Images className="w-5 h-5 text-primary" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={onSelect}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground touch-none"
+              >
+                <GripVertical className="w-5 h-5" />
+              </button>
             </div>
-            <div>
-              <h3 className="font-semibold text-foreground">{gallery.title}</h3>
-              <p className="text-xs text-muted-foreground">Created {createdDate}</p>
-            </div>
-          </button>
+            <button
+              onClick={onClick}
+              className="flex items-center gap-3 text-left flex-1"
+            >
+              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                <Images className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">{gallery.title}</h3>
+                <p className="text-xs text-muted-foreground">Created {createdDate}</p>
+              </div>
+            </button>
+          </div>
 
           <div className="flex items-center gap-1">
-            <div className="flex flex-col">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
-                disabled={!canMoveUp}
-              >
-                <ChevronUp className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
-                disabled={!canMoveDown}
-              >
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </div>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -203,7 +212,7 @@ export function GalleryListCard({
             )}
           </div>
         </button>
-      </motion.div>
+      </div>
 
       <EditGalleryDialog
         open={editOpen}
