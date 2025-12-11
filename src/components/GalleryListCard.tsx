@@ -44,6 +44,7 @@ interface Gallery {
 interface GalleryListCardProps {
   gallery: Gallery;
   profiles: AdminProfile[];
+  selectionMode: boolean;
   isSelected: boolean;
   onSelect: (selected: boolean) => void;
   onClick: () => void;
@@ -54,6 +55,7 @@ interface GalleryListCardProps {
 export function GalleryListCard({ 
   gallery, 
   profiles,
+  selectionMode,
   isSelected,
   onSelect,
   onClick, 
@@ -104,12 +106,13 @@ export function GalleryListCard({
       >
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
+            {selectionMode ? (
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={onSelect}
                 onClick={(e) => e.stopPropagation()}
               />
+            ) : (
               <button
                 {...attributes}
                 {...listeners}
@@ -117,7 +120,7 @@ export function GalleryListCard({
               >
                 <GripVertical className="w-5 h-5" />
               </button>
-            </div>
+            )}
             <button
               onClick={onClick}
               className="flex items-center gap-3 text-left flex-1"
