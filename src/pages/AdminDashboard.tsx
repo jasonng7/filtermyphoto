@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from '@dnd-kit/sortable';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
@@ -9,13 +24,24 @@ import { AdminProfileCard } from '@/components/AdminProfileCard';
 import { CreateProfileDialog } from '@/components/CreateProfileDialog';
 import { CreateGalleryDialog } from '@/components/CreateGalleryDialog';
 import { GalleryListCard } from '@/components/GalleryListCard';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   FolderPlus, 
   ImagePlus, 
   LogOut, 
   Loader2,
   FolderOpen,
-  Images
+  Images,
+  Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -62,6 +88,23 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [createProfileOpen, setCreateProfileOpen] = useState(false);
   const [createGalleryOpen, setCreateGalleryOpen] = useState(false);
+  
+  // Selection state
+  const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
+  const [selectedGalleries, setSelectedGalleries] = useState<Set<string>>(new Set());
+  const [bulkDeleteProfilesOpen, setBulkDeleteProfilesOpen] = useState(false);
+  const [bulkDeleteGalleriesOpen, setBulkDeleteGalleriesOpen] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -115,6 +158,9 @@ const AdminDashboard = () => {
       );
 
       setGalleries(galleriesWithCounts);
+      // Clear selections after refresh
+      setSelectedProfiles(new Set());
+      setSelectedGalleries(new Set());
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -159,6 +205,31 @@ const AdminDashboard = () => {
       toast({
         title: 'Error deleting profile',
         description: 'Could not delete the profile.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleBulkDeleteProfiles = async () => {
+    try {
+      const ids = Array.from(selectedProfiles);
+      const { error } = await supabase
+        .from('admin_profiles')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Sources deleted',
+        description: `${ids.length} Google Drive source(s) have been removed.`,
+      });
+      setBulkDeleteProfilesOpen(false);
+      fetchData();
+    } catch (error) {
+      toast({
+        title: 'Error deleting sources',
+        description: 'Could not delete the sources.',
         variant: 'destructive',
       });
     }
@@ -221,7 +292,6 @@ const AdminDashboard = () => {
 
   const handleDeleteGallery = async (galleryId: string) => {
     try {
-      // First delete all photos in the gallery
       const { error: photosError } = await supabase
         .from('photos')
         .delete()
@@ -229,7 +299,6 @@ const AdminDashboard = () => {
 
       if (photosError) throw photosError;
 
-      // Then delete the gallery
       const { error } = await supabase
         .from('galleries')
         .delete()
@@ -251,49 +320,113 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleMoveProfile = async (index: number, direction: 'up' | 'down') => {
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= profiles.length) return;
-
-    const updatedProfiles = [...profiles];
-    [updatedProfiles[index], updatedProfiles[newIndex]] = [updatedProfiles[newIndex], updatedProfiles[index]];
-
-    // Update display_order in database
+  const handleBulkDeleteGalleries = async () => {
     try {
-      await Promise.all([
-        supabase.from('admin_profiles').update({ display_order: index }).eq('id', updatedProfiles[index].id),
-        supabase.from('admin_profiles').update({ display_order: newIndex }).eq('id', updatedProfiles[newIndex].id),
-      ]);
-      setProfiles(updatedProfiles.map((p, i) => ({ ...p, display_order: i })));
+      const ids = Array.from(selectedGalleries);
+      
+      // Delete photos for all galleries
+      for (const id of ids) {
+        await supabase.from('photos').delete().eq('gallery_id', id);
+      }
+
+      const { error } = await supabase
+        .from('galleries')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Galleries deleted',
+        description: `${ids.length} gallery(ies) and their photos have been removed.`,
+      });
+      setBulkDeleteGalleriesOpen(false);
+      fetchData();
     } catch (error) {
       toast({
-        title: 'Error reordering',
-        description: 'Could not reorder the sources.',
+        title: 'Error deleting galleries',
+        description: 'Could not delete the galleries.',
         variant: 'destructive',
       });
     }
   };
 
-  const handleMoveGallery = async (index: number, direction: 'up' | 'down') => {
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= galleries.length) return;
+  const handleProfileDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const updatedGalleries = [...galleries];
-    [updatedGalleries[index], updatedGalleries[newIndex]] = [updatedGalleries[newIndex], updatedGalleries[index]];
+    const oldIndex = profiles.findIndex((p) => p.id === active.id);
+    const newIndex = profiles.findIndex((p) => p.id === over.id);
 
+    const newProfiles = arrayMove(profiles, oldIndex, newIndex);
+    setProfiles(newProfiles);
+
+    // Update display_order in database
     try {
-      await Promise.all([
-        supabase.from('galleries').update({ display_order: index }).eq('id', updatedGalleries[index].id),
-        supabase.from('galleries').update({ display_order: newIndex }).eq('id', updatedGalleries[newIndex].id),
-      ]);
-      setGalleries(updatedGalleries.map((g, i) => ({ ...g, display_order: i })));
+      await Promise.all(
+        newProfiles.map((profile, index) =>
+          supabase.from('admin_profiles').update({ display_order: index }).eq('id', profile.id)
+        )
+      );
     } catch (error) {
       toast({
         title: 'Error reordering',
-        description: 'Could not reorder the galleries.',
+        description: 'Could not save the new order.',
         variant: 'destructive',
       });
+      fetchData();
     }
+  };
+
+  const handleGalleryDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = galleries.findIndex((g) => g.id === active.id);
+    const newIndex = galleries.findIndex((g) => g.id === over.id);
+
+    const newGalleries = arrayMove(galleries, oldIndex, newIndex);
+    setGalleries(newGalleries);
+
+    // Update display_order in database
+    try {
+      await Promise.all(
+        newGalleries.map((gallery, index) =>
+          supabase.from('galleries').update({ display_order: index }).eq('id', gallery.id)
+        )
+      );
+    } catch (error) {
+      toast({
+        title: 'Error reordering',
+        description: 'Could not save the new order.',
+        variant: 'destructive',
+      });
+      fetchData();
+    }
+  };
+
+  const toggleProfileSelection = (id: string, selected: boolean) => {
+    setSelectedProfiles((prev) => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(id);
+      } else {
+        newSet.delete(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleGallerySelection = (id: string, selected: boolean) => {
+    setSelectedGalleries((prev) => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(id);
+      } else {
+        newSet.delete(id);
+      }
+      return newSet;
+    });
   };
 
   if (authLoading || loading) {
@@ -335,10 +468,22 @@ const AdminDashboard = () => {
                 <FolderOpen className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Google Drive Sources</h2>
               </div>
-              <Button onClick={() => setCreateProfileOpen(true)}>
-                <FolderPlus className="w-4 h-4" />
-                Add Source
-              </Button>
+              <div className="flex items-center gap-2">
+                {selectedProfiles.size > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => setBulkDeleteProfilesOpen(true)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete {selectedProfiles.size}
+                  </Button>
+                )}
+                <Button onClick={() => setCreateProfileOpen(true)}>
+                  <FolderPlus className="w-4 h-4" />
+                  Add Source
+                </Button>
+              </div>
             </div>
 
             {profiles.length === 0 ? (
@@ -358,20 +503,26 @@ const AdminDashboard = () => {
                 </Button>
               </motion.div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {profiles.map((profile, index) => (
-                  <AdminProfileCard
-                    key={profile.id}
-                    profile={profile}
-                    onDelete={() => handleDeleteProfile(profile.id)}
-                    onEdit={(newName, newUrl) => handleEditProfile(profile.id, newName, newUrl)}
-                    onMoveUp={() => handleMoveProfile(index, 'up')}
-                    onMoveDown={() => handleMoveProfile(index, 'down')}
-                    canMoveUp={index > 0}
-                    canMoveDown={index < profiles.length - 1}
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleProfileDragEnd}
+              >
+                <SortableContext items={profiles.map((p) => p.id)} strategy={rectSortingStrategy}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {profiles.map((profile) => (
+                      <AdminProfileCard
+                        key={profile.id}
+                        profile={profile}
+                        isSelected={selectedProfiles.has(profile.id)}
+                        onSelect={(selected) => toggleProfileSelection(profile.id, selected)}
+                        onDelete={() => handleDeleteProfile(profile.id)}
+                        onEdit={(newName, newUrl) => handleEditProfile(profile.id, newName, newUrl)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </section>
 
@@ -382,13 +533,25 @@ const AdminDashboard = () => {
                 <Images className="w-5 h-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Galleries</h2>
               </div>
-              <Button 
-                onClick={() => setCreateGalleryOpen(true)}
-                disabled={profiles.length === 0}
-              >
-                <ImagePlus className="w-4 h-4" />
-                Create Gallery
-              </Button>
+              <div className="flex items-center gap-2">
+                {selectedGalleries.size > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => setBulkDeleteGalleriesOpen(true)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete {selectedGalleries.size}
+                  </Button>
+                )}
+                <Button 
+                  onClick={() => setCreateGalleryOpen(true)}
+                  disabled={profiles.length === 0}
+                >
+                  <ImagePlus className="w-4 h-4" />
+                  Create Gallery
+                </Button>
+              </div>
             </div>
 
             {galleries.length === 0 ? (
@@ -412,22 +575,28 @@ const AdminDashboard = () => {
                 )}
               </motion.div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {galleries.map((gallery, index) => (
-                  <GalleryListCard
-                    key={gallery.id}
-                    gallery={gallery}
-                    profiles={profiles}
-                    onClick={() => navigate(`/admin/gallery/${gallery.id}`)}
-                    onEdit={(newName, newProfileId) => handleEditGallery(gallery.id, newName, newProfileId)}
-                    onDelete={() => handleDeleteGallery(gallery.id)}
-                    onMoveUp={() => handleMoveGallery(index, 'up')}
-                    onMoveDown={() => handleMoveGallery(index, 'down')}
-                    canMoveUp={index > 0}
-                    canMoveDown={index < galleries.length - 1}
-                  />
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleGalleryDragEnd}
+              >
+                <SortableContext items={galleries.map((g) => g.id)} strategy={rectSortingStrategy}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {galleries.map((gallery) => (
+                      <GalleryListCard
+                        key={gallery.id}
+                        gallery={gallery}
+                        profiles={profiles}
+                        isSelected={selectedGalleries.has(gallery.id)}
+                        onSelect={(selected) => toggleGallerySelection(gallery.id, selected)}
+                        onClick={() => navigate(`/admin/gallery/${gallery.id}`)}
+                        onEdit={(newName, newProfileId) => handleEditGallery(gallery.id, newName, newProfileId)}
+                        onDelete={() => handleDeleteGallery(gallery.id)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </section>
         </motion.div>
@@ -445,6 +614,48 @@ const AdminDashboard = () => {
         profiles={profiles}
         onSuccess={handleGalleryCreated}
       />
+
+      {/* Bulk Delete Profiles Dialog */}
+      <AlertDialog open={bulkDeleteProfilesOpen} onOpenChange={setBulkDeleteProfilesOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedProfiles.size} source(s)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the selected Google Drive sources. Existing galleries created from these sources will not be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleBulkDeleteProfiles} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete {selectedProfiles.size}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Galleries Dialog */}
+      <AlertDialog open={bulkDeleteGalleriesOpen} onOpenChange={setBulkDeleteGalleriesOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedGalleries.size} gallery(ies)?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the selected galleries and all their photos. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleBulkDeleteGalleries} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete {selectedGalleries.size}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
