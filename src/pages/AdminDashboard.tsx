@@ -25,6 +25,7 @@ interface AdminProfile {
   google_folder_id: string;
   google_folder_url: string;
   created_at: string;
+  display_order: number;
 }
 
 interface Gallery {
@@ -35,6 +36,21 @@ interface Gallery {
   created_at: string;
   photo_count: number;
   liked_count: number;
+  display_order: number;
+  admin_profile_id: string | null;
+}
+
+function extractFolderId(url: string): string | null {
+  const patterns = [
+    /\/folders\/([a-zA-Z0-9_-]+)/,
+    /id=([a-zA-Z0-9_-]+)/,
+    /^([a-zA-Z0-9_-]+)$/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
 }
 
 const AdminDashboard = () => {
@@ -62,30 +78,21 @@ const AdminDashboard = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch admin profiles
       const { data: profilesData, error: profilesError } = await supabase
         .from('admin_profiles')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('display_order', { ascending: true });
 
       if (profilesError) throw profilesError;
       setProfiles(profilesData || []);
 
-      // Fetch galleries with photo counts
       const { data: galleriesData, error: galleriesError } = await supabase
         .from('galleries')
-        .select(`
-          id,
-          title,
-          share_token,
-          selections_submitted,
-          created_at
-        `)
-        .order('created_at', { ascending: false });
+        .select('id, title, share_token, selections_submitted, created_at, display_order, admin_profile_id')
+        .order('display_order', { ascending: true });
 
       if (galleriesError) throw galleriesError;
 
-      // Fetch photo counts for each gallery
       const galleriesWithCounts = await Promise.all(
         (galleriesData || []).map(async (gallery) => {
           const { count: photoCount } = await supabase
@@ -157,51 +164,135 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleRenameProfile = async (profileId: string, newName: string) => {
+  const handleEditProfile = async (profileId: string, newName: string, newUrl: string) => {
     try {
+      const folderId = extractFolderId(newUrl);
+      if (!folderId) throw new Error('Invalid URL');
+
       const { error } = await supabase
         .from('admin_profiles')
-        .update({ name: newName })
+        .update({ 
+          name: newName, 
+          google_folder_url: newUrl,
+          google_folder_id: folderId 
+        })
         .eq('id', profileId);
 
       if (error) throw error;
 
       toast({
-        title: 'Source renamed',
-        description: 'The Google Drive source has been renamed.',
+        title: 'Source updated',
+        description: 'The Google Drive source has been updated.',
       });
       fetchData();
     } catch (error) {
       toast({
-        title: 'Error renaming source',
-        description: 'Could not rename the source.',
+        title: 'Error updating source',
+        description: 'Could not update the source.',
         variant: 'destructive',
       });
       throw error;
     }
   };
 
-  const handleRenameGallery = async (galleryId: string, newName: string) => {
+  const handleEditGallery = async (galleryId: string, newName: string, newProfileId: string | null) => {
     try {
       const { error } = await supabase
         .from('galleries')
-        .update({ title: newName })
+        .update({ title: newName, admin_profile_id: newProfileId })
         .eq('id', galleryId);
 
       if (error) throw error;
 
       toast({
-        title: 'Gallery renamed',
-        description: 'The gallery has been renamed.',
+        title: 'Gallery updated',
+        description: 'The gallery has been updated.',
       });
       fetchData();
     } catch (error) {
       toast({
-        title: 'Error renaming gallery',
-        description: 'Could not rename the gallery.',
+        title: 'Error updating gallery',
+        description: 'Could not update the gallery.',
         variant: 'destructive',
       });
       throw error;
+    }
+  };
+
+  const handleDeleteGallery = async (galleryId: string) => {
+    try {
+      // First delete all photos in the gallery
+      const { error: photosError } = await supabase
+        .from('photos')
+        .delete()
+        .eq('gallery_id', galleryId);
+
+      if (photosError) throw photosError;
+
+      // Then delete the gallery
+      const { error } = await supabase
+        .from('galleries')
+        .delete()
+        .eq('id', galleryId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Gallery deleted',
+        description: 'The gallery and all its photos have been removed.',
+      });
+      fetchData();
+    } catch (error) {
+      toast({
+        title: 'Error deleting gallery',
+        description: 'Could not delete the gallery.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleMoveProfile = async (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= profiles.length) return;
+
+    const updatedProfiles = [...profiles];
+    [updatedProfiles[index], updatedProfiles[newIndex]] = [updatedProfiles[newIndex], updatedProfiles[index]];
+
+    // Update display_order in database
+    try {
+      await Promise.all([
+        supabase.from('admin_profiles').update({ display_order: index }).eq('id', updatedProfiles[index].id),
+        supabase.from('admin_profiles').update({ display_order: newIndex }).eq('id', updatedProfiles[newIndex].id),
+      ]);
+      setProfiles(updatedProfiles.map((p, i) => ({ ...p, display_order: i })));
+    } catch (error) {
+      toast({
+        title: 'Error reordering',
+        description: 'Could not reorder the sources.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleMoveGallery = async (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= galleries.length) return;
+
+    const updatedGalleries = [...galleries];
+    [updatedGalleries[index], updatedGalleries[newIndex]] = [updatedGalleries[newIndex], updatedGalleries[index]];
+
+    try {
+      await Promise.all([
+        supabase.from('galleries').update({ display_order: index }).eq('id', updatedGalleries[index].id),
+        supabase.from('galleries').update({ display_order: newIndex }).eq('id', updatedGalleries[newIndex].id),
+      ]);
+      setGalleries(updatedGalleries.map((g, i) => ({ ...g, display_order: i })));
+    } catch (error) {
+      toast({
+        title: 'Error reordering',
+        description: 'Could not reorder the galleries.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -268,12 +359,16 @@ const AdminDashboard = () => {
               </motion.div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {profiles.map((profile) => (
+                {profiles.map((profile, index) => (
                   <AdminProfileCard
                     key={profile.id}
                     profile={profile}
                     onDelete={() => handleDeleteProfile(profile.id)}
-                    onRename={(newName) => handleRenameProfile(profile.id, newName)}
+                    onEdit={(newName, newUrl) => handleEditProfile(profile.id, newName, newUrl)}
+                    onMoveUp={() => handleMoveProfile(index, 'up')}
+                    onMoveDown={() => handleMoveProfile(index, 'down')}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < profiles.length - 1}
                   />
                 ))}
               </div>
@@ -318,12 +413,18 @@ const AdminDashboard = () => {
               </motion.div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {galleries.map((gallery) => (
+                {galleries.map((gallery, index) => (
                   <GalleryListCard
                     key={gallery.id}
                     gallery={gallery}
+                    profiles={profiles}
                     onClick={() => navigate(`/admin/gallery/${gallery.id}`)}
-                    onRename={(newName) => handleRenameGallery(gallery.id, newName)}
+                    onEdit={(newName, newProfileId) => handleEditGallery(gallery.id, newName, newProfileId)}
+                    onDelete={() => handleDeleteGallery(gallery.id)}
+                    onMoveUp={() => handleMoveGallery(index, 'up')}
+                    onMoveDown={() => handleMoveGallery(index, 'down')}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < galleries.length - 1}
                   />
                 ))}
               </div>
